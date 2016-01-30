@@ -1,0 +1,18 @@
+{
+  "name": "sarad",
+  "version": "1.0.0",
+  "description": "word salad friendly programming language",
+  "author": "ABA",
+  "license": "MIT",
+  "devDependencies": {
+    "glob": "^6.0.4",
+    "ts-loader": "^0.7.2",
+    "typescript": "^1.7.5",
+    "webpack-livereload-plugin": "^0.4.0"
+  },
+  "dependencies": {
+    "lodash": "^4.0.0",
+    "lz-string": "^1.4.4",
+    "p5": "^0.4.21"
+  }
+}
