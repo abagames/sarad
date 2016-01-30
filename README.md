@@ -1,7 +1,7 @@
 sarad
 ======================
 
-Write a program only with the left click and the right click
+Write a program only by a simple click
 
 ### Demo
 
