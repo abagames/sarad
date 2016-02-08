@@ -49,9 +49,16 @@ export function init() {
 function resetTerms() {
     terms = [];
     let indices = generator.predict();
-    cursor.x = cursor.y = 0;
-    appendLine(0);
-    _.forEach(indices, (i) => addTermToCode(i));
+    cursor.y = 0;
+    let line = [];
+    _.forEach(indices, (i) => {
+        line.push(i);
+        if (generator.indexToTerm[i] === parser.carriageReturnStr) {
+            appendLine(line);
+            line = [];
+        }
+    });
+    drawCode();
     termHistory = [];
     storeTermHistory();
 }
@@ -138,19 +145,16 @@ function getSketch() {
 }
 
 let editorP5: p5;
-type Term = { index: number, parsed: any, x: number };
+type Term = { index: number, parsed: any };
 let terms: Term[][] = [];
 function getParsedSentences() {
     return _.map(terms, (t) => <any[]>_.map(t, 'parsed'));
 }
 
-function getIndices(cx: number, cy: number) {
+function getIndices(cy: number) {
     let indices: number[] = [];
     for (let y = 0; y < cy; y++) {
         indices = indices.concat(<number[]>_.map(terms[y], 'index'));
-    }
-    for (let x = 0; x < cx; x++) {
-        indices.push(terms[cy][x].index);
     }
     return indices;
 }
@@ -158,7 +162,7 @@ function getIndices(cx: number, cy: number) {
 const lineHeight = 10;
 const maxLineCount = height / lineHeight;
 let linesStartY = height / 2;
-let cursor: { x: number, y: number } = { x: 0, y: 0 };
+let cursor: { y: number } = { y: 0 };
 
 function initEditor() {
     let sketch = (p: p5) => {
@@ -171,11 +175,10 @@ function initEditor() {
             let canvasElement: HTMLCanvasElement = canvas.canvas;
             canvasElement.oncontextmenu = (e) => { e.preventDefault(); }
             canvasElement.onmousedown = (e) => {
+                cursor.y = Math.floor((p.mouseY - linesStartY) / lineHeight) + 1;
                 if (e.button === 2) {
-                    setCursorPos(p.mouseX, p.mouseY);
                     isRightPressing = true;
                 } else {
-                    setCursorPos(p.mouseX, p.mouseY, true);
                     prevPredictionStatus = null;
                     isLeftPressing = true;
                 }
@@ -227,78 +230,49 @@ function initEditor() {
     editorP5 = new p5(sketch);
 }
 
-function setCursorPos(mx: number, my: number, isAppending = false) {
-    let cx = 0;
-    let cy = Math.floor((my - linesStartY) / lineHeight) + 1;
-    if (cy >= terms.length) {
-        if (isAppending) {
-            cy = terms.length;
-            appendLine(cy);
-        } else {
-            cy = terms.length - 1;
-        }
-    } else if (cy >= 0) {
-        let ll = terms[cy].length;
-        cx = ll;
-        _.forEach(terms[cy], (t, x) => {
-            if (mx < t.x) {
-                cx = x;
-                return false;
-            }
-        });
-        if (isAppending &&
-            (ll == 0 ||
-                (cx >= ll - 1 && terms[cy][ll - 1].parsed.type === 'carriageReturn'))) {
-            cx = 0;
-            cy++;
-            appendLine(cy);
-        }
-    } else {
-        cy = 0;
-        if (isAppending) {
-            appendLine(cy);
-        }
-    }
-    cursor.x = cx;
-    cursor.y = cy;
-}
-
-function appendLine(y: number, line: Term[] = []) {
-    terms.splice(y, 0, line);
-}
-
 let prevPredictedIndex;
 let prevPredictionStatus;
+const maxTermCount = 20;
+const carriageReturnTypeStr = 'carriageReturn';
 function onLeftPressing() {
-    let pt;
-    if (prevPredictionStatus == null) {
-        pt = generator.predictTerm(getIndices(cursor.x, cursor.y));
-    } else {
-        pt = generator.predictTerm
-            (null, prevPredictionStatus, prevPredictedIndex);
+    if (cursor.y < 0) {
+        cursor.y = 0;
+    } else if (cursor.y >= terms.length) {
+        cursor.y = terms.length;
     }
-    addTermToCode(pt.next);
-    prevPredictedIndex = pt.next;
-    prevPredictionStatus = pt.prev;
+    let line: number[] = [];
+    for (let i = 0; i < maxTermCount; i++) {
+        let pt;
+        if (prevPredictionStatus == null) {
+            pt = generator.predictTerm(getIndices(cursor.y));
+        } else {
+            pt = generator.predictTerm
+                (null, prevPredictionStatus, prevPredictedIndex);
+        }
+        prevPredictedIndex = pt.next;
+        prevPredictionStatus = pt.prev;
+        line.push(pt.next)
+        if (pt.next === 0 || generator.indexToTerm[pt.next] === parser.carriageReturnStr) {
+            break;
+        }
+    }
+    appendLine(line);
     drawCode();
 }
 
-function addTermToCode(termIndex: number) {
-    let parsed;
-    if (termIndex === 0) {
-        parsed = { type: 'carriageReturn' };
-    } else {
-        let termStr = generator.indexToTerm[termIndex];
-        parsed = parser.parseTerm(termStr);
-    }
-    terms[cursor.y].splice(cursor.x, 0, { index: termIndex, parsed: parsed, x: 0 });
-    cursor.x++;
-    if (parsed.type === 'carriageReturn') {
-        let restLine = terms[cursor.y].splice(cursor.x);
-        cursor.y++;
-        appendLine(cursor.y, restLine);
-        cursor.x = 0;
-    }
+function appendLine(termIndices: number[]) {
+    let line: Term[] = _.map(termIndices, (ti) => {
+        let parsed;
+        if (ti === 0) {
+            parsed = { type: carriageReturnTypeStr };
+        } else {
+            let termStr = generator.indexToTerm[ti];
+            parsed = parser.parseTerm(termStr);
+        }
+        return { index: ti, parsed: parsed };
+    });
+    terms.splice(cursor.y, 0, line);
+    cursor.y++;
     if (terms.length >= maxLineCount) {
         terms.splice(maxLineCount);
     }
@@ -308,21 +282,7 @@ function onRightPressing() {
     if (cursor.y < 0 || cursor.y >= terms.length) {
         return;
     }
-    if (terms[cursor.y].length <= 0) {
-        terms.splice(cursor.y, 1);
-        return;
-    }
-    if (cursor.x >= terms[cursor.y].length) {
-        cursor.x = terms[cursor.y].length - 1;
-    }
-    let term = terms[cursor.y][cursor.x];
-    terms[cursor.y].splice(cursor.x, 1);
-    if (term.parsed.type == 'carriageReturn') {
-        let line = terms.splice(cursor.y + 1, 1)[0];
-        if (line != null) {
-            terms[cursor.y] = terms[cursor.y].concat(line);
-        }
-    }
+    terms.splice(cursor.y, 1);
     drawCode();
 }
 
@@ -336,14 +296,12 @@ function drawCode() {
         let lineStr = _.reduce(line, (p, t: Term) => {
             if (t.parsed.type == 'indent') {
                 if (!isIndent) {
-                    t.x = 9999;
                     return p;
                 }
             } else {
                 isIndent = false;
             }
             let str = `${p} ${parser.toString(t.parsed)}`;
-            t.x = codeStartX + editorP5.textWidth(str);
             return str;
         }, '');
         editorP5.text(lineStr, codeStartX, ly);

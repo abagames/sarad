@@ -11,7 +11,6 @@ let letter_size = 5; // size of letter embeddings
 let sample_softmax_temperature = 1.0; // how peaky model predictions should be
 let max_terms_gen = 25; // max length of generated sentences
 let max_sentences_gen = 36;
-const carriageReturnStr = '<CR>';
 
 // various global var inits
 let epoch_size = -1;

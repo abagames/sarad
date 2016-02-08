@@ -70,7 +70,7 @@ export function parse(sentences: string[][]) {
     );
 }
 
-const carriageReturnStr = '<CR>';
+export const carriageReturnStr = '<CR>';
 const indentStr = '<IDT>';
 export function parseTerm(t: string): any {
     if (t == null || t.length <= 0) {
