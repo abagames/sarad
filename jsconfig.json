@@ -1,9 +1,5 @@
 {
-    "compilerOptions": {
-        "target": "es5",
-        "module": "commonjs"
-    },
     "exclude": [
-        "node_modules"
+        "node_modules", "web_modules", "app"
     ]
 }
