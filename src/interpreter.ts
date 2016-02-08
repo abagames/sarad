@@ -188,7 +188,7 @@ function exec(funcName: string, args: number[], stack: any[], variableIndex: num
             pushNumber(args[0] / args[1], stack);
             break;
         case 'mod':
-            pushNumber(args[0] + args[1], stack);
+            pushNumber(args[0] % args[1], stack);
             break;
         case 'lessThan':
             pushNumber(args[0] < args[1] ? 1 : 0, stack);
