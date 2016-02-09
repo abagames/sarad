@@ -1,5 +1,12 @@
 import * as _ from 'lodash';
 
+export interface ParsedTerm {
+    type: string;
+    name?: string;
+    argCount?: number;
+    variableIndex?: number;
+    value?: number;
+};
 const flowFunctionArgs = [
     'if/1', 'elif/1', 'else/0', 'while/1', 'break/0'
 ];
@@ -64,7 +71,7 @@ export function init() {
     });
 }
 
-export function parse(sentences: string[][]) {
+export function parse(sentences: string[][]): ParsedTerm[][] {
     return _.map(sentences, (sentence) =>
         _.map(sentence, (t) => parseTerm(t))
     );
@@ -72,7 +79,7 @@ export function parse(sentences: string[][]) {
 
 export const carriageReturnStr = '<CR>';
 const indentStr = '<IDT>';
-export function parseTerm(t: string): any {
+export function parseTerm(t: string): ParsedTerm {
     if (t == null || t.length <= 0) {
         return {
             type: 'nop'
@@ -198,10 +205,10 @@ function assignNumber(term: string) {
     }, ''));
 }
 
-export function toString(term: any) {
+export function toString(term: ParsedTerm): string {
     switch (term.type) {
         case 'number':
-            return term.value;
+            return term.value.toString();
         case 'variable':
             return `V${term.variableIndex}`;
         case 'variableNegative':
@@ -227,7 +234,7 @@ export function toString(term: any) {
             if (str != null) {
                 return str;
             }
-            return `${term.name}/${term.argCount}`;
+            return term.name;
         case 'assignFunction':
             var str = '';
             _.forOwn(assignFunctions, (value, key) => {

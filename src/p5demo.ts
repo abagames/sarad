@@ -10,8 +10,6 @@ const version = 1;
 let sketchP5;
 let width = 480;
 let height = 480;
-let termHistory: Term[][][] = [];
-let currentTermIndex: number;
 let undoButton: HTMLButtonElement;
 let redoButton: HTMLButtonElement;
 export function init() {
@@ -25,7 +23,7 @@ export function init() {
     redoButton.onclick = () => { undoRedo(1); };
     document.getElementById('save').onclick = () => {
         let baseUrl = window.location.href.split('?')[0];
-        let dataStr = LZString.compressToEncodedURIComponent(JSON.stringify(terms));
+        let dataStr = LZString.compressToEncodedURIComponent(JSON.stringify(getTerms()));
         let url = `${baseUrl}?v=${version}&d=${dataStr}`;
         (<HTMLInputElement>document.getElementById('saved_url')).value = url;
     };
@@ -38,58 +36,86 @@ export function init() {
         setFromUrl(query);
     };
     document.getElementById('reset').onclick = () => {
-        resetTerms();
+        resetLines();
         drawCode();
         resetSketch();
     };
-    resetTerms();
+    resetLines();
     setFromUrl(window.location.search.substring(1));
 }
 
-function resetTerms() {
-    terms = [];
-    let indices = generator.predict();
+type Term = interpreter.Term;
+type Func = interpreter.Func;
+type Line = interpreter.Line;
+let lines: Line[] = [];
+
+function getIndices(cy: number): number[] {
+    let indices: number[] = [];
+    for (let y = 0; y < cy; y++) {
+        indices = indices.concat(<number[]>_.map(lines[y].terms, 'index'));
+    }
+    return indices;
+}
+
+function getTerms(): Term[][] {
+    return <Term[][]>_.map(lines, 'terms');
+}
+
+let termHistory: Term[][][] = [];
+let termHistoryIndex: number;
+const maxTermHistoryLength = 100;
+
+function resetLines() {
+    lines = [];
     cursor.y = 0;
-    let line = [];
-    _.forEach(indices, (i) => {
-        line.push(i);
-        if (generator.indexToTerm[i] === parser.carriageReturnStr) {
-            appendLine(line);
-            line = [];
-        }
-    });
+    addLinesFromTermIndicies(generator.predict());
     drawCode();
     termHistory = [];
     storeTermHistory();
 }
 
+function addLinesFromTermIndicies(indicies: number[]) {
+    let lineTermIndicies = [];
+    _.forEach(indicies, (i) => {
+        lineTermIndicies.push(i);
+        if (generator.indexToTerm[i] === parser.carriageReturnStr) {
+            appendLineFromTermIndicies(lineTermIndicies);
+            lineTermIndicies = [];
+        }
+    });
+}
+
 function enableUndoRedoButtons() {
     undoButton.disabled = redoButton.disabled = true;
     let thl = termHistory.length;
-    if (currentTermIndex > 0) {
+    if (termHistoryIndex > 0) {
         undoButton.disabled = false;
     }
-    if (currentTermIndex < thl - 1) {
+    if (termHistoryIndex < thl - 1) {
         redoButton.disabled = false;
     }
 }
 
 function undoRedo(offset) {
-    currentTermIndex += offset;
-    terms = _.cloneDeep(termHistory[currentTermIndex]);
+    termHistoryIndex += offset;
+    lines = [];
+    addLinesFromTerms(_.cloneDeep(termHistory[termHistoryIndex]));
     drawCode();
     resetSketch();
     enableUndoRedoButtons();
 }
 
-const maxTermHistoryLength = 100;
+function addLinesFromTerms(terms: Term[][]) {
+    _.forEach(terms, (ts) => appendLineFromTerms(ts));
+}
+
 function storeTermHistory() {
-    termHistory.splice(currentTermIndex + 1);
-    termHistory.push(_.cloneDeep(terms));
+    termHistory.splice(termHistoryIndex + 1);
+    termHistory.push(_.cloneDeep(getTerms()));
     while (termHistory.length > maxTermHistoryLength) {
         termHistory.shift();
     }
-    currentTermIndex = termHistory.length - 1;
+    termHistoryIndex = termHistory.length - 1;
     enableUndoRedoButtons();
 }
 
@@ -119,7 +145,8 @@ export function setFromUrl(query: string) {
         return;
     }
     try {
-        terms = JSON.parse(LZString.decompressFromEncodedURIComponent(dataStr));
+        let terms = JSON.parse(LZString.decompressFromEncodedURIComponent(dataStr));
+        addLinesFromTerms(terms);
     } catch (e) {
         return;
     }
@@ -139,26 +166,12 @@ function getSketch() {
             interpreter.init(10, p);
         };
         p.draw = () => {
-            interpreter.interpret(getParsedSentences());
+            interpreter.interpret(lines);
         };
     }
 }
 
 let editorP5: p5;
-type Term = { index: number, parsed: any };
-let terms: Term[][] = [];
-function getParsedSentences() {
-    return _.map(terms, (t) => <any[]>_.map(t, 'parsed'));
-}
-
-function getIndices(cy: number) {
-    let indices: number[] = [];
-    for (let y = 0; y < cy; y++) {
-        indices = indices.concat(<number[]>_.map(terms[y], 'index'));
-    }
-    return indices;
-}
-
 const lineHeight = 10;
 const maxLineCount = height / lineHeight;
 let linesStartY = height / 2;
@@ -218,7 +231,7 @@ function initEditor() {
                 showingMessageCount = 9999;
                 onRightPressing();
             } else {
-                let lc = terms.length;
+                let lc = lines.length;
                 let ofs = ((height - lc * lineHeight) / 2 - linesStartY) * 0.1;
                 if (Math.abs(ofs) >= 1) {
                     linesStartY += ofs;
@@ -237,8 +250,8 @@ const carriageReturnTypeStr = 'carriageReturn';
 function onLeftPressing() {
     if (cursor.y < 0) {
         cursor.y = 0;
-    } else if (cursor.y >= terms.length) {
-        cursor.y = terms.length;
+    } else if (cursor.y >= lines.length) {
+        cursor.y = lines.length;
     }
     let line: number[] = [];
     for (let i = 0; i < maxTermCount; i++) {
@@ -256,12 +269,12 @@ function onLeftPressing() {
             break;
         }
     }
-    appendLine(line);
+    appendLineFromTermIndicies(line);
     drawCode();
 }
 
-function appendLine(termIndices: number[]) {
-    let line: Term[] = _.map(termIndices, (ti) => {
+function appendLineFromTermIndicies(termIndices: number[]) {
+    let lineTerms: Term[] = _.map(termIndices, (ti) => {
         let parsed;
         if (ti === 0) {
             parsed = { type: carriageReturnTypeStr };
@@ -271,18 +284,23 @@ function appendLine(termIndices: number[]) {
         }
         return { index: ti, parsed: parsed };
     });
-    terms.splice(cursor.y, 0, line);
+    appendLineFromTerms(lineTerms);
+}
+
+function appendLineFromTerms(lineTerms: Term[]) {
+    let line = interpreter.analyzeLine(lineTerms);
+    lines.splice(cursor.y, 0, line);
     cursor.y++;
-    if (terms.length >= maxLineCount) {
-        terms.splice(maxLineCount);
+    if (lines.length >= maxLineCount) {
+        lines.splice(maxLineCount);
     }
 }
 
 function onRightPressing() {
-    if (cursor.y < 0 || cursor.y >= terms.length) {
+    if (cursor.y < 0 || cursor.y >= lines.length) {
         return;
     }
-    terms.splice(cursor.y, 1);
+    lines.splice(cursor.y, 1);
     drawCode();
 }
 
@@ -291,19 +309,8 @@ function drawCode() {
     editorP5.textSize(10);
     editorP5.clear();
     let ly = linesStartY;
-    _.forEach(terms, (line: Term[]) => {
-        let isIndent = true;
-        let lineStr = _.reduce(line, (p, t: Term) => {
-            if (t.parsed.type == 'indent') {
-                if (!isIndent) {
-                    return p;
-                }
-            } else {
-                isIndent = false;
-            }
-            let str = `${p} ${parser.toString(t.parsed)}`;
-            return str;
-        }, '');
+    _.forEach(lines, (line: Line) => {
+        let lineStr = interpreter.getLineString(line);
         editorP5.text(lineStr, codeStartX, ly);
         ly += 10;
     });

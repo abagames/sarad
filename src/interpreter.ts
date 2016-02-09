@@ -1,4 +1,5 @@
 import * as _ from 'lodash';
+import * as parser from './parser';
 
 let vars: number[];
 let libObj: any;
@@ -7,22 +8,36 @@ export function init(varCount: number, _libObj: any) {
     libObj = _libObj;
 }
 
+export interface Term {
+    index: number;
+    parsed: parser.ParsedTerm;
+};
+export interface Func {
+    parsed: parser.ParsedTerm;
+    args: any[]
+};
+export interface Line {
+    funcs: Func[];
+    indentLevel: number;
+    terms: Term[];
+};
+
 const maxInterpretLineCount = 1000;
-let sentences: any[];
+let lines: Line[];
 let prevIndentLevel: number;
 let flowStack: any[];
 let pc: number;
-export function interpret(_sentences: any[]) {
-    if (_sentences.length <= 0) {
+export function interpret(_lines: Line[]) {
+    if (_lines.length <= 0) {
         return;
     }
-    sentences = _sentences;
+    lines = _lines;
     prevIndentLevel = 0;
     flowStack = [];
     pc = 0;
     for (let i = 0; i < maxInterpretLineCount; i++) {
-        interpretLine(sentences[pc]);
-        if (pc >= sentences.length) {
+        interpretLine(lines[pc]);
+        if (pc >= lines.length) {
             let indentLevel = 0;
             if (indentLevel < prevIndentLevel) {
                 let indentOutStatus = controlIndentEndFlow(indentLevel);
@@ -36,9 +51,8 @@ export function interpret(_sentences: any[]) {
     }
 }
 
-function interpretLine(sentence: any[]) {
-    let stack: any[] = [];
-    let indentLevel = countIndentLevel(sentence);
+function interpretLine(line: Line) {
+    let indentLevel = line.indentLevel;
     let indentOutStatus: string = null;
     if (indentLevel >= 0 && indentLevel < prevIndentLevel) {
         indentOutStatus = controlIndentEndFlow(indentLevel);
@@ -48,29 +62,19 @@ function interpretLine(sentence: any[]) {
         }
     }
     let flowStatus: string = null;
-    _.forEachRight(sentence, (t) => {
-        switch (t.type) {
-            case 'number':
-            case 'variable':
-            case 'variableNegative':
-            case 'variableInvert':
-                stack.push(t);
-                break;
-            case 'reservedVariable':
-                pushReservedVariable(t.name, stack);
-                break;
+    _.forEach(line.funcs, (f) => {
+        let fp = f.parsed;
+        let args: number[] = getArgNumbers(f.args);
+        switch (fp.type) {
             case 'function':
-                var args = getFromStack(stack, t.argCount);
-                exec(t.name, args, stack);
+                exec(fp.name, args);
                 break;
             case 'assignFunction':
-                var args = getFromStack(stack, t.argCount);
-                exec(t.name, args, stack, t.variableIndex);
+                exec(fp.name, args, fp.variableIndex);
                 break;
             case 'flowFunction':
-                var args = getFromStack(stack, t.argCount);
                 flowStatus =
-                    execFlow(t.name, args, stack, indentLevel, indentOutStatus);
+                    execFlow(fp.name, args, indentLevel, indentOutStatus);
                 if (flowStatus === 'jump') {
                     return false;
                 }
@@ -85,8 +89,35 @@ function interpretLine(sentence: any[]) {
     pc++;
 }
 
-function countIndentLevel(sentences: any[]) {
-    return _.findIndex(sentences, (t: any) => t.type !== 'indent');
+function getArgNumbers(args: any[]): number[] {
+    return _.map(args, (a) => {
+        if (_.has(a, 'args')) {
+            let ap: parser.ParsedTerm = a.parsed;
+            let args: number[] = getArgNumbers(a.args);
+            switch (ap.type) {
+                case 'function':
+                    return exec(ap.name, args);
+                case 'assignFunction':
+                    return exec(ap.name, args, ap.variableIndex);
+            }
+        } else {
+            let ap: parser.ParsedTerm = a;
+            switch (ap.type) {
+                case 'number':
+                    return ap.value;
+                case 'variable':
+                    return vars[ap.variableIndex];
+                case 'variableNegative':
+                    return -vars[ap.variableIndex];
+                case 'variableInvert':
+                    return vars[ap.variableIndex] === 0 ? 1 : 0;
+                case 'reservedVariable':
+                    return libObj[ap.name];
+                default:
+                    return 0;
+            }
+        }
+    });
 }
 
 function controlIndentEndFlow(indentLevel) {
@@ -104,7 +135,7 @@ function controlIndentEndFlow(indentLevel) {
     return 'out';
 }
 
-function execFlow(name: string, args: number[], stack: any[],
+function execFlow(name: string, args: number[],
     indentLevel: number, indentOutStatus: string) {
     let isJump = false;
     switch (name) {
@@ -132,11 +163,10 @@ function execFlow(name: string, args: number[], stack: any[],
 function goNextBlock(indentLevel) {
     for (; ;) {
         pc++;
-        if (pc >= sentences.length) {
+        if (pc >= lines.length) {
             return;
         }
-        let il = countIndentLevel(sentences[pc]);
-        if (il <= indentLevel) {
+        if (lines[pc].indentLevel <= indentLevel) {
             return;
         }
     }
@@ -152,123 +182,133 @@ function breakBlock() {
     }
 }
 
-function getFromStack(stack: any[], argCount: number): number[] {
-    return _.times(argCount, () => {
-        if (stack.length <= 0) {
-            return 0;
-        }
-        let s = stack.pop();
-        switch (s.type) {
-            case 'number':
-                return s.value;
-            case 'variable':
-                return vars[s.variableIndex];
-            case 'variableNegative':
-                return -vars[s.variableIndex];
-            case 'variableInvert':
-                return vars[s.variableIndex] === 0 ? 1 : 0;
-            default:
-                return 0;
-        }
-    });
-}
-
-function exec(funcName: string, args: number[], stack: any[], variableIndex: number = null) {
+function exec(funcName: string, args: number[], variableIndex: number = null): number {
     switch (funcName) {
         case 'add':
-            pushNumber(args[0] + args[1], stack);
-            break;
+            return args[0] + args[1];
         case 'sub':
-            pushNumber(args[0] - args[1], stack);
-            break;
+            return args[0] - args[1];
         case 'mul':
-            pushNumber(args[0] * args[1], stack);
-            break;
+            return args[0] * args[1]
         case 'div':
-            pushNumber(args[0] / args[1], stack);
+            return args[0] / args[1];
             break;
         case 'mod':
-            pushNumber(args[0] % args[1], stack);
+            return args[0] % args[1];
             break;
         case 'lessThan':
-            pushNumber(args[0] < args[1] ? 1 : 0, stack);
-            break;
+            return args[0] < args[1] ? 1 : 0;
         case 'greaterThan':
-            pushNumber(args[0] > args[1] ? 1 : 0, stack);
-            break;
+            return args[0] > args[1] ? 1 : 0;
         case 'and':
-            pushNumber(((args[0] !== 0) && (args[1] !== 0)) ? 1 : 0, stack);
-            break;
+            return ((args[0] !== 0) && (args[1] !== 0)) ? 1 : 0;
         case 'or':
-            pushNumber(((args[0] !== 0) || (args[1] !== 0)) ? 1 : 0, stack);
+            return ((args[0] !== 0) || (args[1] !== 0)) ? 1 : 0;
             break;
         case 'equal':
-            pushNumber(args[0] === args[1] ? 1 : 0, stack);
-            break;
+            return args[0] === args[1] ? 1 : 0;
         case 'notEqual':
-            pushNumber(args[0] !== args[1] ? 1 : 0, stack);
-            break;
+            return args[0] !== args[1] ? 1 : 0;
         case 'lessThanOrEqual':
-            pushNumber(args[0] <= args[1] ? 1 : 0, stack);
-            break;
+            return args[0] <= args[1] ? 1 : 0;
         case 'greaterThanOrEqual':
-            pushNumber(args[0] >= args[1] ? 1 : 0, stack);
-            break;
+            return args[0] >= args[1] ? 1 : 0;
         case 'not':
-            pushNumber(args[0] === 0 ? 1 : 0, stack);
-            break;
+            return args[0] === 0 ? 1 : 0;
         case 'assign':
             vars[variableIndex] = args[0];
-            pushNumber(vars[variableIndex], stack);
-            break;
+            return vars[variableIndex];
         case 'assignAdd':
             vars[variableIndex] += args[0];
-            pushNumber(vars[variableIndex], stack);
-            break;
+            return vars[variableIndex];
         case 'assignSub':
             vars[variableIndex] -= args[0];
-            pushNumber(vars[variableIndex], stack);
-            break;
+            return vars[variableIndex];
         case 'assignMul':
             vars[variableIndex] *= args[0];
-            pushNumber(vars[variableIndex], stack);
-            break;
+            return vars[variableIndex];
         case 'assignDiv':
             vars[variableIndex] /= args[0];
-            pushNumber(vars[variableIndex], stack);
-            break;
+            return vars[variableIndex];
         case 'assignMod':
             vars[variableIndex] %= args[0];
-            pushNumber(vars[variableIndex], stack);
-            break;
+            return vars[variableIndex];
         case 'assignInc':
             vars[variableIndex]++;
-            pushNumber(vars[variableIndex], stack);
-            break;
+            return vars[variableIndex];
         case 'assignDec':
             vars[variableIndex]--;
-            pushNumber(vars[variableIndex], stack);
-            break;
+            return vars[variableIndex];
         default:
             try {
                 let result = libObj[funcName].apply(libObj, args);
                 if (_.isNumber(result)) {
-                    pushNumber(result, stack);
+                    return result;
                 }
             } catch (e) {
                 //console.error(`exec failed: ${funcName} ${e}`);
             }
-            break;
     }
+    return 0;
 }
 
-function pushReservedVariable(name: string, stack: any[]) {
-    pushNumber(libObj[name], stack);
+export function analyzeLine(terms: Term[]): Line {
+    let analyzeStack = [];
+    let indentLevel = countIndentLevel(terms);
+    _.forEachRight(terms, (t) => {
+        let pt = t.parsed;
+        switch (pt.type) {
+            case 'number':
+            case 'variable':
+            case 'variableNegative':
+            case 'variableInvert':
+            case 'reservedVariable':
+                analyzeStack.push(pt);
+                break;
+            case 'function':
+            case 'assignFunction':
+            case 'flowFunction':
+                let args = getFromAnalyzeStack(analyzeStack, pt.argCount);
+                analyzeStack.push({ parsed: pt, args: args });
+                break;
+        }
+    });
+    let funcs = _.filter(analyzeStack, (as) => {
+        return (_.has(as, 'args'));
+    });
+    return { funcs: funcs, indentLevel: indentLevel, terms: terms };
 }
 
-function pushNumber(v: number, stack: any[]) {
-    if (_.isNaN(v) || v === Number.POSITIVE_INFINITY || v === Number.NEGATIVE_INFINITY) {
-        v = 0;
+function countIndentLevel(terms: Term[]) {
+    return _.findIndex(terms, (t: Term) => t.parsed.type !== 'indent');
+}
+
+function getFromAnalyzeStack(stack: any[], argCount: number) {
+    return _.times(argCount, () => {
+        if (stack.length <= 0) {
+            return { type: 'number', value: 0 };
+        }
+        return stack.pop();
+    });
+}
+
+export function getLineString(line: Line) {
+    return _.times(line.indentLevel, () => '  ').join('') +
+        _.map(line.funcs, (f: Func) => getFuncString(f)).join(':');
+}
+
+function getFuncString(func: Func) {
+    if (func.args.length <= 0) {
+        return parser.toString(func.parsed);
+    } else {
+        return `${parser.toString(func.parsed)}(${
+            _.map(func.args, (a) => {
+                if (_.has(a, 'args')) {
+                    return getFuncString(a);
+                } else {
+                    return parser.toString(a);
+                }
+            }).join(',')
+            })`;
     }
-    stack.push({ type: 'number', value: v });
 }
