@@ -12,7 +12,17 @@ let width = 480;
 let height = 480;
 let undoButton: HTMLButtonElement;
 let redoButton: HTMLButtonElement;
+const reservedIdentifiers = [
+    'HALF_PI', 'PI', 'QUATER_PI', 'TAU', 'TWO_PI',
+    'POINTS', 'LINES', 'TRIANGLES', 'TRIANGLE_FAN', 'TRIANGLE_STRIP', 'QUADS', 'QUAD_STRIP',
+    'CLOSE',
+    'LEFT', 'CENTER', 'RIGHT',
+    'THRESHOLD', 'GRAY', 'OPAQUE', 'INVERT', 'POSTERIZE', 'BLUR', 'ERODE', 'DILATE',
+    'mouseX', 'mouseY', 'pmouseX', 'pmouseY', 'mouseButton',
+    'width', 'height'
+];
 export function init() {
+    parser.init(reservedIdentifiers);
     sketchP5 = new p5(getSketch());
     setInterval(resetSketch, 10 * 1000);
     initEditor();

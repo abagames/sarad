@@ -42,18 +42,12 @@ const reservedNumbers = {
     'true': 1,
     'false': 0
 };
-const reservedIdentifiers = [
-    'HALF_PI', 'PI', 'QUATER_PI', 'TAU', 'TWO_PI',
-    'POINTS', 'LINES', 'TRIANGLES', 'TRIANGLE_FAN', 'TRIANGLE_STRIP', 'QUADS', 'QUAD_STRIP',
-    'CLOSE',
-    'LEFT', 'CENTER', 'RIGHT',
-    'mouseX', 'mouseY', 'pmouseX', 'pmouseY', 'mouseButton', 'mouseIsPressed',
-    'width', 'height'
-];
 
+let reservedIdentifiers: string[]
 let flowFunctions: any[];
 let assignFunctions: any;
-export function init() {
+export function init(_reservedIdentifiers = []) {
+    reservedIdentifiers = _reservedIdentifiers;
     flowFunctions = _.map(flowFunctionArgs, (fa) => {
         var s = fa.split('/');
         return {
