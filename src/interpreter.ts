@@ -298,24 +298,24 @@ export function getLineString(line: Line) {
 }
 
 function getFuncString(func: Func) {
-    if (func.args.length <= 0) {
-        return parser.getTermString(func.parsed);
-    } else {
-        let opFuncName = parser.getOperatonFunctionName(func.parsed);
-        if (opFuncName != null) {
-            if (func.parsed.argCount === 1) {
-                return `${opFuncName}${getArgString(func.args[0])}`;
-            } else if (func.parsed.argCount === 2) {
-                return `(${getArgString(func.args[0])} ${opFuncName} ${getArgString(func.args[1])})`;
-            }
+    let opFuncName = parser.getOperatonFunctionName(func.parsed);
+    if (opFuncName != null) {
+        if (func.parsed.argCount === 1) {
+            return `${opFuncName}${getArgString(func.args[0])}`;
+        } else if (func.parsed.argCount === 2) {
+            return `(${getArgString(func.args[0])} ${opFuncName} ${getArgString(func.args[1])})`;
         }
-        let assignFuncName = parser.getAssignFunctionName(func.parsed);
-        if (assignFuncName != null) {
-            let vi = assignFuncName.indexOf('V');
+    }
+    let assignFuncName = parser.getAssignFunctionName(func.parsed);
+    if (assignFuncName != null) {
+        let vi = assignFuncName.indexOf('V');
+        if (func.args.length === 0) {
+            return `${assignFuncName.substr(vi)}${assignFuncName.substr(0, vi)}`;
+        } else {
             return `${assignFuncName.substr(vi)} ${assignFuncName.substr(0, vi)} ${getArgString(func.args[0])}`;
         }
-        return `${parser.getTermString(func.parsed)}(${_.map(func.args, (a) => getArgString(a)).join(', ')})`;
     }
+    return `${parser.getTermString(func.parsed)}(${_.map(func.args, (a) => getArgString(a)).join(', ')})`;
 }
 
 function getArgString(arg: any) {
