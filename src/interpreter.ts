@@ -22,7 +22,7 @@ export interface Line {
     terms: Term[];
 };
 
-const maxInterpretLineCount = 1000;
+const maxInterpretLineCount = 100;
 let lines: Line[];
 let prevIndentLevel: number;
 let flowStack: any[];
