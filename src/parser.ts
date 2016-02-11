@@ -199,7 +199,7 @@ function assignNumber(term: string) {
     }, ''));
 }
 
-export function toString(term: ParsedTerm): string {
+export function getTermString(term: ParsedTerm): string {
     switch (term.type) {
         case 'number':
             return term.value.toString();
@@ -212,32 +212,17 @@ export function toString(term: ParsedTerm): string {
         case 'reservedVariable':
             return term.name;
         case 'function':
-            var str: string = null;
-            _.forOwn(operationFunctions, (value, key) => {
-                if (value === term.name) {
-                    str = key;
-                    return false;
-                }
-            });
-            _.forOwn(singleArgOperationFunctions, (value, key) => {
-                if (value === term.name) {
-                    str = key;
-                    return false;
-                }
-            });
-            if (str != null) {
-                return str;
+            let opName = getOperatonFunctionName(term);
+            if (opName == null) {
+                opName = term.name;
             }
-            return term.name;
+            return opName;
         case 'assignFunction':
-            var str = '';
-            _.forOwn(assignFunctions, (value, key) => {
-                if (value.name === term.name) {
-                    str = `${key}${term.variableIndex}`;
-                    return false;
-                }
-            });
-            return str;
+            let afName = getAssignFunctionName(term);
+            if (afName == null) {
+                afName = '';
+            }
+            return afName;
         case 'flowFunction':
             return term.name;
         case 'indent':
@@ -246,4 +231,39 @@ export function toString(term: ParsedTerm): string {
         case 'nop':
             return '';
     }
+}
+
+export function getOperatonFunctionName(term: ParsedTerm): string {
+    if (term.type !== 'function') {
+        return null;
+    }
+    let result = null;
+    _.forOwn(operationFunctions, (value, key) => {
+        if (value === term.name) {
+            result = key;
+            return false;
+        }
+    });
+    _.forOwn(singleArgOperationFunctions, (value, key) => {
+        if (value === term.name) {
+            result = key;
+            return false;
+        }
+    });
+    return result;
+}
+
+export function getAssignFunctionName(term: ParsedTerm): string {
+    if (term.type !== 'assignFunction') {
+        return null;
+    }
+    let result = null;
+    _.forOwn(assignFunctions, (value, key) => {
+        if (value.name === term.name) {
+            result = `${key}${term.variableIndex}`;
+            return false;
+        }
+    });
+    return result;
+
 }
