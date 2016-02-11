@@ -325,3 +325,14 @@ function getArgString(arg: any) {
         return parser.getTermString(arg);
     }
 }
+
+export function removeOnlyOperationsFunction(line: Line) {
+    line.funcs = _.filter(line.funcs, (f) => hasSomeNoOperationFunctionsInFunc(f));
+}
+
+function hasSomeNoOperationFunctionsInFunc(func: Func) {
+    if (parser.getOperatonFunctionName(func.parsed) == null) {
+        return true;
+    }
+    return _.some(func.args, (a) => _.has(a, 'args') && hasSomeNoOperationFunctionsInFunc(a));
+}

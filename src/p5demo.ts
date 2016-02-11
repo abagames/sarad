@@ -256,6 +256,7 @@ function initEditor() {
 let prevPredictedIndex;
 let prevPredictionStatus;
 const maxTermCount = 20;
+const maxRetryCount = 10;
 const carriageReturnTypeStr = 'carriageReturn';
 function onLeftPressing() {
     if (cursor.y < 0) {
@@ -264,26 +265,30 @@ function onLeftPressing() {
         cursor.y = lines.length;
     }
     let line: number[] = [];
-    for (let i = 0; i < maxTermCount; i++) {
-        let pt;
-        if (prevPredictionStatus == null) {
-            pt = generator.predictTerm(getIndices(cursor.y));
-        } else {
-            pt = generator.predictTerm
-                (null, prevPredictionStatus, prevPredictedIndex);
+    for (let j = 0; j < maxRetryCount; j++) {
+        for (let i = 0; i < maxTermCount; i++) {
+            let pt;
+            if (prevPredictionStatus == null) {
+                pt = generator.predictTerm(getIndices(cursor.y));
+            } else {
+                pt = generator.predictTerm
+                    (null, prevPredictionStatus, prevPredictedIndex);
+            }
+            prevPredictedIndex = pt.next;
+            prevPredictionStatus = pt.prev;
+            line.push(pt.next)
+            if (pt.next === 0 || generator.indexToTerm[pt.next] === parser.carriageReturnStr) {
+                break;
+            }
         }
-        prevPredictedIndex = pt.next;
-        prevPredictionStatus = pt.prev;
-        line.push(pt.next)
-        if (pt.next === 0 || generator.indexToTerm[pt.next] === parser.carriageReturnStr) {
+        if (appendLineFromTermIndicies(line) != null) {
             break;
         }
     }
-    appendLineFromTermIndicies(line);
     drawCode();
 }
 
-function appendLineFromTermIndicies(termIndices: number[]) {
+function appendLineFromTermIndicies(termIndices: number[]): Line {
     let lineTerms: Term[] = _.map(termIndices, (ti) => {
         let parsed;
         if (ti === 0) {
@@ -294,16 +299,21 @@ function appendLineFromTermIndicies(termIndices: number[]) {
         }
         return { index: ti, parsed: parsed };
     });
-    appendLineFromTerms(lineTerms);
+    return appendLineFromTerms(lineTerms);
 }
 
-function appendLineFromTerms(lineTerms: Term[]) {
+function appendLineFromTerms(lineTerms: Term[]): Line {
     let line = interpreter.analyzeLine(lineTerms);
+    interpreter.removeOnlyOperationsFunction(line);
+    if (line.funcs.length <= 0) {
+        return null;
+    }
     lines.splice(cursor.y, 0, line);
     cursor.y++;
     if (lines.length >= maxLineCount) {
         lines.splice(maxLineCount);
     }
+    return line;
 }
 
 function onRightPressing() {
