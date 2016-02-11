@@ -298,6 +298,9 @@ export function getLineString(line: Line) {
 }
 
 function getFuncString(func: Func) {
+    if (func.parsed.type === 'flowFunction' && func.parsed.argCount === 0) {
+        return parser.getTermString(func.parsed);
+    }
     let opFuncName = parser.getOperatonFunctionName(func.parsed);
     if (opFuncName != null) {
         if (func.parsed.argCount === 1) {
