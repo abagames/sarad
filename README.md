@@ -60,7 +60,7 @@ Digits('0'-'9') are converted to 'D' and general variable names are changed to '
   vertex/3 - width DD - mouseY 1 0
   ```
 
-5. Assign digits to 'D', convert the code into inner notation and eliminate dead code.
+5. Assign digits to 'D', convert the operator into infix notation and eliminate dead code.
 
   ```
   if(V0)
