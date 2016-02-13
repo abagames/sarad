@@ -7,7 +7,7 @@ Write a program only by a simple click
 
 Left click to generate a code and right click to erase a code.
 
-![screenshot](http://abagames.sakura.ne.jp/16/sarad/screenshot.gif)
+![screenshot](http://abagames.sakura.ne.jp/16/sarad/screenshot11.gif)
 
 * [p5.js demo](http://abagames.sakura.ne.jp/16/sarad/app/index.html)
 
